@@ -1,18 +1,13 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, powerMonitor } from 'electron'
 import { join } from 'path'
+import { applyTimerEvent, createTimerState, REMINDER_PAYLOADS } from './timer-engine.mjs'
 
-const WORK_SECS = 20 * 60
-const BREAK_SECS = 20
 const MAIN_WINDOW_WIDTH = 232
 const MAIN_WINDOW_HEIGHT = 300
 
 let mainWin, reminderWins = [], tray
-let remaining = WORK_SECS
-let breakCount = 0
-let paused = false
-let reminderActive = false
+let timerState = createTimerState()
 let awayRestStartedAt = null
-let awayRestCounted = false
 
 function makeTrayIcon() {
   const iconPaths = [
@@ -41,20 +36,51 @@ function makeTrayIcon() {
 
 function updateTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: paused ? '▶ 继续' : '⏸ 暂停', click: () => { paused = !paused; updateTrayMenu() } },
-    { label: '⏰ 立即提醒', click: showReminder },
+    { label: timerState.paused ? '▶ 继续' : '⏸ 暂停', click: togglePause },
+    { label: '⏰ 立即提醒', click: requestImmediateReminder },
     { type: 'separator' },
     { label: '退出', click: () => app.exit() }
   ]))
 }
 
-function showReminder() {
-  remaining = WORK_SECS
-  reminderActive = true
+function isReminderActive() {
+  return timerState.activeReminderType !== null
+}
+
+function showReminder(payload) {
   reminderWins.forEach(w => {
     w.show()
-    w.webContents.send('reminder:start', BREAK_SECS)
+    w.webContents.send('reminder:start', payload)
   })
+}
+
+function hideReminder() {
+  reminderWins.forEach(w => w.hide())
+}
+
+function applyEffects(effects) {
+  effects.forEach(effect => {
+    if (effect.type === 'show-reminder') showReminder(effect.reminder)
+    else if (effect.type === 'hide-reminder') hideReminder()
+  })
+}
+
+function runTimerEvent(event) {
+  const result = applyTimerEvent(timerState, event)
+  timerState = result.state
+  applyEffects(result.effects)
+}
+
+function togglePause() {
+  timerState = { ...timerState, paused: !timerState.paused }
+  updateTrayMenu()
+}
+
+function requestImmediateReminder() {
+  if (isReminderActive()) return
+  const payload = timerState.movementRemaining <= 0 ? REMINDER_PAYLOADS.movement : REMINDER_PAYLOADS.eye
+  timerState = { ...timerState, activeReminderType: payload.type }
+  showReminder(payload)
 }
 
 function loadURL(win, path) {
@@ -63,31 +89,18 @@ function loadURL(win, path) {
   else win.loadFile(join(__dirname, '../renderer/' + path))
 }
 
-function completeValidRest() {
-  if (awayRestStartedAt) awayRestCounted = true
-  reminderActive = false
-  reminderWins.forEach(w => w.hide())
-  breakCount++
-  remaining = WORK_SECS
-}
-
 function beginAwayRest() {
   if (awayRestStartedAt) return
   awayRestStartedAt = Date.now()
-  awayRestCounted = false
+  runTimerEvent({ type: 'away-started' })
 }
 
 function finishAwayRest() {
   if (!awayRestStartedAt) return
 
-  const elapsedMs = Date.now() - awayRestStartedAt
-  const alreadyCounted = awayRestCounted
+  const elapsedSecs = (Date.now() - awayRestStartedAt) / 1000
   awayRestStartedAt = null
-  awayRestCounted = false
-
-  if (!alreadyCounted && elapsedMs >= BREAK_SECS * 1000) {
-    completeValidRest()
-  }
+  runTimerEvent({ type: 'away-finished', elapsedSecs })
 }
 
 function watchAwayRest() {
@@ -126,25 +139,28 @@ app.whenReady().then(() => {
   tray.on('click', () => mainWin.isVisible() ? mainWin.hide() : mainWin.show())
   updateTrayMenu()
 
-  ipcMain.handle('status', () => ({ remaining, breakCount, paused }))
+  ipcMain.handle('status', () => ({
+    remaining: Math.max(0, timerState.remaining),
+    movementRemaining: Math.max(0, timerState.movementRemaining),
+    breakCount: timerState.breakCount,
+    paused: timerState.paused,
+    activeReminderType: timerState.activeReminderType
+  }))
   ipcMain.on('app:quit', () => app.exit())
   ipcMain.on('app:hide', () => mainWin.hide())
   ipcMain.on('tray:action', (_e, action) => {
-    if (action === 'pause') { paused = !paused; updateTrayMenu() }
-    else if (action === 'remind') showReminder()
+    if (action === 'pause') togglePause()
+    else if (action === 'remind') requestImmediateReminder()
   })
 
-  ipcMain.on('reminder:done', () => {
-    if (!reminderActive) return
-    completeValidRest()
+  ipcMain.on('reminder:done', (_e, type) => {
+    runTimerEvent({ type: 'reminder-complete', reminderType: type ?? timerState.activeReminderType })
   })
 
   watchAwayRest()
 
   setInterval(() => {
-    if (paused || reminderActive || awayRestStartedAt) return
-    remaining--
-    if (remaining <= 0) showReminder()
+    runTimerEvent({ type: 'active-second' })
   }, 1000)
 })
 
