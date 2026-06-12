@@ -14,7 +14,6 @@
     </div>
 
     <div class="stats">今日已休息 <b>{{ breakCount }}</b> 次</div>
-    <div class="movement">站立活动 {{ movementTimeStr }}</div>
 
     <button class="action-btn" @click="togglePause">
       {{ paused ? '▶ 继续' : '⏸ 暂停' }}
@@ -27,7 +26,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const remaining = ref(1200)
-const movementRemaining = ref(3600)
 const breakCount = ref(0)
 const paused = ref(false)
 
@@ -35,21 +33,16 @@ const TOTAL = 1200
 const CIRC = 2 * Math.PI * 52
 
 const offset = computed(() => CIRC * (1 - remaining.value / TOTAL))
-const timeStr = computed(() => formatTime(remaining.value))
-const movementTimeStr = computed(() => formatTime(movementRemaining.value))
-
-function formatTime(value) {
-  const secs = Math.max(0, value)
-  const m = Math.floor(secs / 60).toString().padStart(2, '0')
-  const s = (secs % 60).toString().padStart(2, '0')
+const timeStr = computed(() => {
+  const m = Math.floor(remaining.value / 60).toString().padStart(2, '0')
+  const s = (remaining.value % 60).toString().padStart(2, '0')
   return `${m}:${s}`
-}
+})
 
 let timer
 async function refresh() {
   const s = await window.api.getStatus()
   remaining.value = s.remaining
-  movementRemaining.value = s.movementRemaining
   breakCount.value = s.breakCount
   paused.value = s.paused
 }
@@ -139,12 +132,6 @@ body {
 
 .stats { font-size: 12px; color: rgba(255,255,255,0.34); -webkit-app-region: no-drag; }
 .stats b { color: rgba(79, 156, 249, 0.78); }
-.movement {
-  font-size: 11px;
-  color: rgba(255,255,255,0.28);
-  line-height: 1;
-  -webkit-app-region: no-drag;
-}
 
 .action-btn {
   width: 100%;

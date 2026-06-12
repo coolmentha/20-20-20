@@ -6,9 +6,9 @@
         <circle cx="60" cy="60" r="50" class="arc" :stroke-dashoffset="arcOffset" />
       </svg>
       <div class="num">{{ count }}</div>
-      <p class="title">{{ title }}</p>
-      <p class="desc">{{ description }}</p>
-      <button v-if="canSkip" class="skip" @click="done">跳过</button>
+      <p class="title">眼睛休息时间</p>
+      <p class="desc">看向 6 米外的地方</p>
+      <button class="skip" @click="done">跳过</button>
     </div>
   </div>
 </template>
@@ -20,53 +20,21 @@ const TOTAL = 20
 const CIRC = 2 * Math.PI * 50
 
 const count = ref(TOTAL)
-const total = ref(TOTAL)
-const type = ref('eye')
-const title = ref('眼睛休息时间')
-const description = ref('看向 6 米外的地方')
-const canSkip = ref(true)
-const arcColor = computed(() => type.value === 'movement' ? '#f59e0b' : '#34d399')
-const arcOffset = computed(() => CIRC * (1 - count.value / total.value))
+const arcOffset = computed(() => CIRC * (1 - count.value / TOTAL))
 
 let breakTimer
 
 function done() {
   clearInterval(breakTimer)
   breakTimer = undefined
-  count.value = total.value
-  window.api.reminderDone(type.value)
-}
-
-function normalizePayload(payload) {
-  if (typeof payload === 'number') {
-    return {
-      type: 'eye',
-      seconds: payload,
-      title: '眼睛休息时间',
-      description: '看向 6 米外的地方',
-      canSkip: true
-    }
-  }
-
-  return {
-    type: payload?.type ?? 'eye',
-    seconds: payload?.seconds ?? TOTAL,
-    title: payload?.title ?? '眼睛休息时间',
-    description: payload?.description ?? '看向 6 米外的地方',
-    canSkip: payload?.canSkip ?? true
-  }
+  count.value = TOTAL
+  window.api.reminderDone()
 }
 
 onMounted(() => {
-  window.api.onReminderStart(payload => {
-    const reminder = normalizePayload(payload)
+  window.api.onReminderStart(secs => {
     clearInterval(breakTimer)
-    type.value = reminder.type
-    total.value = reminder.seconds
-    count.value = reminder.seconds
-    title.value = reminder.title
-    description.value = reminder.description
-    canSkip.value = reminder.canSkip
+    count.value = secs ?? TOTAL
     breakTimer = setInterval(() => {
       count.value--
       if (count.value <= 0) done()
@@ -108,7 +76,7 @@ body { background: transparent; font-family: -apple-system, 'Segoe UI', sans-ser
 .track { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 6; }
 .arc {
   fill: none;
-  stroke: v-bind(arcColor);
+  stroke: #34d399;
   stroke-width: 6;
   stroke-linecap: round;
   stroke-dasharray: v-bind(CIRC);
