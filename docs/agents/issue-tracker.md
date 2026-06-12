@@ -5,7 +5,7 @@
 ## 前置条件
 
 - 仓库已配置 GitHub remote：`https://github.com/coolmentha/20-20-20.git`。
-- 本机需要安装并登录 `gh` CLI。
+- 本机已安装 `gh` CLI，但需要先登录 GitHub。当前可用路径为 `C:\Program Files\GitHub CLI\gh.exe`。
 - 运行 `gh` 命令时默认在仓库根目录执行，让 `gh` 从 `git remote -v` 推断目标仓库。
 
 ## 常用约定
@@ -26,4 +26,4 @@
 
 当技能说“获取相关 ticket”时，运行 `gh issue view <number> --comments`，并同时关注 issue 的标签和评论。
 
-当前仓库已经配置 GitHub remote，但仍未确认本机 `gh` 可用；在满足前置条件前，技能可以先把待发布内容写成本地 Markdown 草稿。
+当前仓库已经配置 GitHub remote，本机也已安装 `gh` CLI；但当前 GitHub CLI 尚未登录，且当前 PowerShell 会话尚未把 `gh` 加入 PATH。在完成 `gh auth login` 前，技能可以先把待发布内容写成本地 Markdown 草稿。

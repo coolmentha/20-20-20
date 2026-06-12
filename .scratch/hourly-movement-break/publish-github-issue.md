@@ -3,12 +3,12 @@
 当前环境还不能直接发布 GitHub issue：
 
 - 仓库已配置 GitHub remote：`https://github.com/coolmentha/20-20-20.git`。
-- 本机未检测到可用的 `gh` CLI。
+- 本机已检测到 `gh` CLI，但尚未登录 GitHub。当前可用路径为 `C:\Program Files\GitHub CLI\gh.exe`。
 
 满足前置条件后，在仓库根目录执行：
 
 ```powershell
-gh issue create `
+& "C:\Program Files\GitHub CLI\gh.exe" issue create `
   --title "每小时站立活动提醒" `
   --label "ready-for-agent" `
   --body-file "docs/prds/hourly-movement-break.md"
