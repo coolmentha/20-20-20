@@ -1,11 +1,12 @@
-# GitHub Issue 发布草稿：每小时站立活动提醒
+# GitHub Issue 发布记录：每小时站立活动提醒
 
-当前环境还不能直接发布 GitHub issue：
+已发布 GitHub issue：
 
 - 仓库已配置 GitHub remote：`https://github.com/coolmentha/20-20-20.git`。
-- 本机已检测到 `gh` CLI，但尚未登录 GitHub。当前可用路径为 `C:\Program Files\GitHub CLI\gh.exe`。
+- 本机已检测到并登录 `gh` CLI。当前可用路径为 `C:\Program Files\GitHub CLI\gh.exe`。
+- Issue 地址：`https://github.com/coolmentha/20-20-20/issues/1`
 
-满足前置条件后，在仓库根目录执行：
+本次使用的发布命令：
 
 ```powershell
 & "C:\Program Files\GitHub CLI\gh.exe" issue create `
