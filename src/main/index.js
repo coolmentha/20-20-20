@@ -3,14 +3,33 @@ import { join } from 'path'
 
 const WORK_SECS = 20 * 60
 const BREAK_SECS = 20
+const MOVEMENT_ACTIVE_SECS = 60 * 60
+const MOVEMENT_BREAK_SECS = 2 * 60
 const MAIN_WINDOW_WIDTH = 232
 const MAIN_WINDOW_HEIGHT = 300
+const REMINDER_PAYLOADS = {
+  eye: {
+    type: 'eye',
+    seconds: BREAK_SECS,
+    title: '眼睛休息时间',
+    description: '看向 6 米外的地方',
+    canSkip: true
+  },
+  movement: {
+    type: 'movement',
+    seconds: MOVEMENT_BREAK_SECS,
+    title: '站起来活动一下',
+    description: '离开屏幕，活动 2 分钟',
+    canSkip: false
+  }
+}
 
 let mainWin, reminderWins = [], tray
 let remaining = WORK_SECS
+let movementRemaining = MOVEMENT_ACTIVE_SECS
 let breakCount = 0
 let paused = false
-let reminderActive = false
+let activeReminderType = null
 let awayRestStartedAt = null
 let awayRestCounted = false
 
@@ -42,19 +61,33 @@ function makeTrayIcon() {
 function updateTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: paused ? '▶ 继续' : '⏸ 暂停', click: () => { paused = !paused; updateTrayMenu() } },
-    { label: '⏰ 立即提醒', click: showReminder },
+    { label: '⏰ 立即提醒', click: requestImmediateReminder },
     { type: 'separator' },
     { label: '退出', click: () => app.exit() }
   ]))
 }
 
-function showReminder() {
-  remaining = WORK_SECS
-  reminderActive = true
+function isReminderActive() {
+  return activeReminderType !== null
+}
+
+function getReminderPayload(type) {
+  return REMINDER_PAYLOADS[type] ?? REMINDER_PAYLOADS.eye
+}
+
+function showReminder(type = 'eye') {
+  if (isReminderActive()) return
+
+  const payload = getReminderPayload(type)
+  activeReminderType = payload.type
   reminderWins.forEach(w => {
     w.show()
-    w.webContents.send('reminder:start', BREAK_SECS)
+    w.webContents.send('reminder:start', payload)
   })
+}
+
+function requestImmediateReminder() {
+  showReminder(movementRemaining <= 0 ? 'movement' : 'eye')
 }
 
 function loadURL(win, path) {
@@ -63,12 +96,22 @@ function loadURL(win, path) {
   else win.loadFile(join(__dirname, '../renderer/' + path))
 }
 
-function completeValidRest() {
-  if (awayRestStartedAt) awayRestCounted = true
-  reminderActive = false
+function hideReminder() {
+  activeReminderType = null
   reminderWins.forEach(w => w.hide())
+}
+
+function recordRest({ resetEye = true, resetMovement = false, hideActiveReminder = true } = {}) {
+  if (awayRestStartedAt) awayRestCounted = true
+  if (hideActiveReminder) hideReminder()
   breakCount++
-  remaining = WORK_SECS
+  if (resetEye) remaining = WORK_SECS
+  if (resetMovement) movementRemaining = MOVEMENT_ACTIVE_SECS
+}
+
+function completeReminder(type) {
+  if (!isReminderActive() || activeReminderType !== type) return
+  recordRest({ resetEye: true, resetMovement: type === 'movement' })
 }
 
 function beginAwayRest() {
@@ -85,8 +128,27 @@ function finishAwayRest() {
   awayRestStartedAt = null
   awayRestCounted = false
 
+  if (alreadyCounted) {
+    if (elapsedMs >= MOVEMENT_BREAK_SECS * 1000) {
+      remaining = WORK_SECS
+      movementRemaining = MOVEMENT_ACTIVE_SECS
+      hideReminder()
+    }
+    return
+  }
+
   if (!alreadyCounted && elapsedMs >= BREAK_SECS * 1000) {
-    completeValidRest()
+    const resetMovement = elapsedMs >= MOVEMENT_BREAK_SECS * 1000
+    if (activeReminderType === 'movement' && !resetMovement) {
+      remaining = WORK_SECS
+      return
+    }
+
+    recordRest({
+      resetEye: true,
+      resetMovement,
+      hideActiveReminder: true
+    })
   }
 }
 
@@ -126,25 +188,33 @@ app.whenReady().then(() => {
   tray.on('click', () => mainWin.isVisible() ? mainWin.hide() : mainWin.show())
   updateTrayMenu()
 
-  ipcMain.handle('status', () => ({ remaining, breakCount, paused }))
+  ipcMain.handle('status', () => ({
+    remaining: Math.max(0, remaining),
+    movementRemaining: Math.max(0, movementRemaining),
+    breakCount,
+    paused,
+    activeReminderType
+  }))
   ipcMain.on('app:quit', () => app.exit())
   ipcMain.on('app:hide', () => mainWin.hide())
   ipcMain.on('tray:action', (_e, action) => {
     if (action === 'pause') { paused = !paused; updateTrayMenu() }
-    else if (action === 'remind') showReminder()
+    else if (action === 'remind') requestImmediateReminder()
   })
 
-  ipcMain.on('reminder:done', () => {
-    if (!reminderActive) return
-    completeValidRest()
+  ipcMain.on('reminder:done', (_e, type) => {
+    completeReminder(type ?? activeReminderType)
   })
 
   watchAwayRest()
 
   setInterval(() => {
-    if (paused || reminderActive || awayRestStartedAt) return
+    if (paused || isReminderActive() || awayRestStartedAt) return
     remaining--
-    if (remaining <= 0) showReminder()
+    movementRemaining--
+
+    if (movementRemaining <= 0) showReminder('movement')
+    else if (remaining <= 0) showReminder('eye')
   }, 1000)
 })
 
