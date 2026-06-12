@@ -1,0 +1,16 @@
+{
+  "name": "20-20-20",
+  "version": "1.0.0",
+  "description": "20-20-20 护眼提醒",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "electron": "^29.1.0",
+    "electron-vite": "^2.1.0",
+    "vue": "^3.4.21"
+  }
+}
