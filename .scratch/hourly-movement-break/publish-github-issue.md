@@ -2,7 +2,7 @@
 
 当前环境还不能直接发布 GitHub issue：
 
-- 仓库尚未配置 GitHub remote。
+- 仓库已配置 GitHub remote：`https://github.com/coolmentha/20-20-20.git`。
 - 本机未检测到可用的 `gh` CLI。
 
 满足前置条件后，在仓库根目录执行：

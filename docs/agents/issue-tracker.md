@@ -4,7 +4,7 @@
 
 ## 前置条件
 
-- 仓库需要配置 GitHub remote。
+- 仓库已配置 GitHub remote：`https://github.com/coolmentha/20-20-20.git`。
 - 本机需要安装并登录 `gh` CLI。
 - 运行 `gh` 命令时默认在仓库根目录执行，让 `gh` 从 `git remote -v` 推断目标仓库。
 
@@ -26,4 +26,4 @@
 
 当技能说“获取相关 ticket”时，运行 `gh issue view <number> --comments`，并同时关注 issue 的标签和评论。
 
-当前仓库还没有配置 GitHub remote，也未确认本机 `gh` 可用；在满足前置条件前，技能可以先把待发布内容写成本地 Markdown 草稿。
+当前仓库已经配置 GitHub remote，但仍未确认本机 `gh` 可用；在满足前置条件前，技能可以先把待发布内容写成本地 Markdown 草稿。
