@@ -1,13 +1,15 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, powerMonitor } from 'electron'
 import { join } from 'path'
-import { applyTimerEvent, createTimerState, REMINDER_PAYLOADS } from './timer-engine.mjs'
+import { createTimerRuntime } from './timer-runtime.mjs'
+import { createStartAtLoginController, isStartAtLoginLaunch } from './start-at-login.mjs'
 
 const MAIN_WINDOW_WIDTH = 232
 const MAIN_WINDOW_HEIGHT = 300
 
 let mainWin, reminderWins = [], tray
-let timerState = createTimerState()
-let awayRestStartedAt = null
+const timerRuntime = createTimerRuntime()
+const startAtLogin = createStartAtLoginController({ app })
+const shouldStartInTray = isStartAtLoginLaunch(process.argv)
 
 function makeTrayIcon() {
   const iconPaths = [
@@ -35,16 +37,29 @@ function makeTrayIcon() {
 }
 
 function updateTrayMenu() {
+  const status = timerRuntime.getStatus()
+  const startAtLoginStatus = startAtLogin.getStatus()
+  const startAtLoginMenuItem = startAtLoginStatus.available
+    ? {
+        label: '开机自启',
+        type: 'checkbox',
+        checked: startAtLoginStatus.openAtLogin,
+        click: () => {
+          startAtLogin.setEnabled(!startAtLoginStatus.openAtLogin)
+          updateTrayMenu()
+        }
+      }
+    : { label: '开机自启（不可用）', enabled: false }
+
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: timerState.paused ? '▶ 继续' : '⏸ 暂停', click: togglePause },
+    { label: status.paused ? '▶ 继续' : '⏸ 暂停', click: togglePause },
     { label: '⏰ 立即提醒', click: requestImmediateReminder },
+    { label: '🚶 立即站立活动', click: requestImmediateMovementReminder },
+    { type: 'separator' },
+    startAtLoginMenuItem,
     { type: 'separator' },
     { label: '退出', click: () => app.exit() }
   ]))
-}
-
-function isReminderActive() {
-  return timerState.activeReminderType !== null
 }
 
 function showReminder(payload) {
@@ -65,22 +80,22 @@ function applyEffects(effects) {
   })
 }
 
-function runTimerEvent(event) {
-  const result = applyTimerEvent(timerState, event)
-  timerState = result.state
-  applyEffects(result.effects)
+function runTimerAction(action) {
+  const effects = timerRuntime.dispatch(action)
+  applyEffects(effects)
 }
 
 function togglePause() {
-  timerState = { ...timerState, paused: !timerState.paused }
+  runTimerAction({ type: 'toggle-pause' })
   updateTrayMenu()
 }
 
 function requestImmediateReminder() {
-  if (isReminderActive()) return
-  const payload = timerState.movementRemaining <= 0 ? REMINDER_PAYLOADS.movement : REMINDER_PAYLOADS.eye
-  timerState = { ...timerState, activeReminderType: payload.type }
-  showReminder(payload)
+  runTimerAction({ type: 'request-immediate-reminder' })
+}
+
+function requestImmediateMovementReminder() {
+  runTimerAction({ type: 'request-immediate-movement-reminder' })
 }
 
 function loadURL(win, path) {
@@ -90,17 +105,11 @@ function loadURL(win, path) {
 }
 
 function beginAwayRest() {
-  if (awayRestStartedAt) return
-  awayRestStartedAt = Date.now()
-  runTimerEvent({ type: 'away-started' })
+  runTimerAction({ type: 'away-started' })
 }
 
 function finishAwayRest() {
-  if (!awayRestStartedAt) return
-
-  const elapsedSecs = (Date.now() - awayRestStartedAt) / 1000
-  awayRestStartedAt = null
-  runTimerEvent({ type: 'away-finished', elapsedSecs })
+  runTimerAction({ type: 'away-finished' })
 }
 
 function watchAwayRest() {
@@ -114,6 +123,7 @@ function createWindows() {
   mainWin = new BrowserWindow({
     width: MAIN_WINDOW_WIDTH, height: MAIN_WINDOW_HEIGHT,
     frame: false, transparent: true, resizable: false,
+    show: !shouldStartInTray,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true }
   })
   loadURL(mainWin, 'index.html')
@@ -139,28 +149,24 @@ app.whenReady().then(() => {
   tray.on('click', () => mainWin.isVisible() ? mainWin.hide() : mainWin.show())
   updateTrayMenu()
 
-  ipcMain.handle('status', () => ({
-    remaining: Math.max(0, timerState.remaining),
-    movementRemaining: Math.max(0, timerState.movementRemaining),
-    breakCount: timerState.breakCount,
-    paused: timerState.paused,
-    activeReminderType: timerState.activeReminderType
-  }))
+  ipcMain.handle('status', () => timerRuntime.getStatus())
   ipcMain.on('app:quit', () => app.exit())
   ipcMain.on('app:hide', () => mainWin.hide())
   ipcMain.on('tray:action', (_e, action) => {
     if (action === 'pause') togglePause()
     else if (action === 'remind') requestImmediateReminder()
+    else if (action === 'movement-remind') requestImmediateMovementReminder()
   })
 
   ipcMain.on('reminder:done', (_e, type) => {
-    runTimerEvent({ type: 'reminder-complete', reminderType: type ?? timerState.activeReminderType })
+    runTimerAction({ type: 'reminder-complete', reminderType: type })
   })
+  ipcMain.on('reminder:movement-now', requestImmediateMovementReminder)
 
   watchAwayRest()
 
   setInterval(() => {
-    runTimerEvent({ type: 'active-second' })
+    runTimerAction({ type: 'active-second' })
   }, 1000)
 })
 

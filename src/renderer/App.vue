@@ -1,6 +1,6 @@
 <template>
-  <div class="window" @mousedown="dragStart">
-    <button class="close-btn" @click="hide">✕</button>
+  <div class="window">
+    <button class="close-btn" @mousedown.stop @click.stop="hide">✕</button>
 
     <div class="ring-wrap">
       <svg viewBox="0 0 120 120" class="ring-svg">
@@ -16,15 +16,19 @@
     <div class="stats">今日已休息 <b>{{ breakCount }}</b> 次</div>
     <div class="movement">站立活动 {{ movementTimeStr }}</div>
 
-    <button class="action-btn" @click="togglePause">
+    <button class="action-btn" @mousedown.stop @click.stop="togglePause">
       {{ paused ? '▶ 继续' : '⏸ 暂停' }}
     </button>
-    <button class="action-btn secondary" @click="remindNow">立即提醒</button>
+    <div class="action-row">
+      <button class="action-btn secondary" @mousedown.stop @click.stop="remindNow">立即提醒</button>
+      <button class="action-btn secondary" @mousedown.stop @click.stop="remindMovementNow">站立活动</button>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { formatTime } from './time-format.mjs'
 
 const remaining = ref(1200)
 const movementRemaining = ref(3600)
@@ -37,13 +41,6 @@ const CIRC = 2 * Math.PI * 52
 const offset = computed(() => CIRC * (1 - remaining.value / TOTAL))
 const timeStr = computed(() => formatTime(remaining.value))
 const movementTimeStr = computed(() => formatTime(movementRemaining.value))
-
-function formatTime(value) {
-  const secs = Math.max(0, value)
-  const m = Math.floor(secs / 60).toString().padStart(2, '0')
-  const s = (secs % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
 
 let timer
 async function refresh() {
@@ -62,12 +59,8 @@ onUnmounted(() => clearInterval(timer))
 
 function togglePause() { window.api.trayAction('pause') }
 function remindNow() { window.api.trayAction('remind') }
+function remindMovementNow() { window.api.remindMovement() }
 function hide() { window.api.hideToTray() }
-
-function dragStart(e) {
-  if (e.button !== 0) return
-  window.electronAPI?.startDrag?.()
-}
 </script>
 
 <style>
@@ -93,7 +86,7 @@ body {
   align-items: center;
   padding: 12px 14px 14px;
   gap: 8px;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
 }
 
 .close-btn {
@@ -111,7 +104,7 @@ body {
   position: relative;
   width: 120px;
   height: 120px;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 .ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 
@@ -137,13 +130,13 @@ body {
 .time { font-size: 26px; font-weight: 300; color: rgba(255,255,255,0.82); letter-spacing: 1px; }
 .label { font-size: 11px; color: rgba(255,255,255,0.32); }
 
-.stats { font-size: 12px; color: rgba(255,255,255,0.34); -webkit-app-region: no-drag; }
+.stats { font-size: 12px; color: rgba(255,255,255,0.34); -webkit-app-region: drag; }
 .stats b { color: rgba(79, 156, 249, 0.78); }
 .movement {
   font-size: 11px;
   color: rgba(255,255,255,0.28);
   line-height: 1;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .action-btn {
@@ -160,6 +153,17 @@ body {
   -webkit-app-region: no-drag;
 }
 .action-btn:hover { background: rgba(79, 156, 249, 0.14); }
+.action-row {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+.action-row .action-btn {
+  flex: 1;
+  padding-left: 4px;
+  padding-right: 4px;
+}
 .action-btn.secondary {
   background: rgba(255,255,255,0.03);
   border-color: rgba(255,255,255,0.06);

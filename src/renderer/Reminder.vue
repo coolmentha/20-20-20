@@ -8,7 +8,7 @@
       <div class="num">{{ count }}</div>
       <p class="title">{{ title }}</p>
       <p class="desc">{{ description }}</p>
-      <button v-if="canSkip" class="skip" @click="done">跳过</button>
+      <button v-if="canSkip" class="skip" @mousedown.stop @click.stop="done">跳过</button>
     </div>
   </div>
 </template>
@@ -102,6 +102,7 @@ body { background: transparent; font-family: -apple-system, 'Segoe UI', sans-ser
   align-items: center;
   gap: 10px;
   position: relative;
+  pointer-events: auto;
 }
 
 .ring { width: 120px; height: 120px; transform: rotate(-90deg); }
@@ -143,6 +144,8 @@ body { background: transparent; font-family: -apple-system, 'Segoe UI', sans-ser
   padding: 5px 16px;
   cursor: pointer;
   transition: all 0.2s;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .skip:hover { color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.3); }
 </style>

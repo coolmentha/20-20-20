@@ -18,7 +18,7 @@ export const REMINDER_PAYLOADS = {
     seconds: DEFAULT_TIMER_CONFIG.movementBreakSecs,
     title: '站起来活动一下',
     description: '离开屏幕，活动 2 分钟',
-    canSkip: false
+    canSkip: true
   }
 }
 
