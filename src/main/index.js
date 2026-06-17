@@ -2,14 +2,16 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, powerMoni
 import { join } from 'path'
 import { createTimerRuntime } from './timer-runtime.mjs'
 import { createStartAtLoginController, isStartAtLoginLaunch } from './start-at-login.mjs'
+import { createReminderWindowRegistry } from './reminder-windows.mjs'
 
 const MAIN_WINDOW_WIDTH = 232
 const MAIN_WINDOW_HEIGHT = 300
 
-let mainWin, reminderWins = [], tray
+let mainWin, tray
 const timerRuntime = createTimerRuntime()
 const startAtLogin = createStartAtLoginController({ app })
 const shouldStartInTray = isStartAtLoginLaunch(process.argv)
+let reminderWindowRegistry
 
 function makeTrayIcon() {
   const iconPaths = [
@@ -63,14 +65,11 @@ function updateTrayMenu() {
 }
 
 function showReminder(payload) {
-  reminderWins.forEach(w => {
-    w.show()
-    w.webContents.send('reminder:start', payload)
-  })
+  reminderWindowRegistry?.showAll(payload)
 }
 
 function hideReminder() {
-  reminderWins.forEach(w => w.hide())
+  reminderWindowRegistry?.hideAll()
 }
 
 function applyEffects(effects) {
@@ -119,6 +118,13 @@ function watchAwayRest() {
   powerMonitor.on('resume', finishAwayRest)
 }
 
+function watchDisplayChanges() {
+  const syncReminderWindows = () => reminderWindowRegistry?.sync()
+  screen.on('display-added', syncReminderWindows)
+  screen.on('display-removed', syncReminderWindows)
+  screen.on('display-metrics-changed', syncReminderWindows)
+}
+
 function createWindows() {
   mainWin = new BrowserWindow({
     width: MAIN_WINDOW_WIDTH, height: MAIN_WINDOW_HEIGHT,
@@ -129,16 +135,14 @@ function createWindows() {
   loadURL(mainWin, 'index.html')
   mainWin.on('close', () => app.exit())
 
-  for (const display of screen.getAllDisplays()) {
-    const { x, y, width, height } = display.bounds
-    const w = new BrowserWindow({
-      x, y, width, height,
-      frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true, show: false,
-      webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true }
-    })
-    loadURL(w, 'reminder.html')
-    reminderWins.push(w)
-  }
+  reminderWindowRegistry = createReminderWindowRegistry({
+    BrowserWindow,
+    screen,
+    preloadPath: join(__dirname, '../preload/index.js'),
+    loadReminderURL: win => loadURL(win, 'reminder.html')
+  })
+  reminderWindowRegistry.sync()
+  watchDisplayChanges()
 }
 
 app.whenReady().then(() => {
